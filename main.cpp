@@ -25,9 +25,9 @@ const string AVAILABILITY_REPORT_HEADER = "[Charger Availability Reports]";
 class errorStation : public runtime_error {
 
     public:
-    errorStation(const string& errorStationMessage = "") : runtime_error(errorStationMessage) {
+        errorStation(const string& errorStationMessage = "") : runtime_error(errorStationMessage) {
 
-    }
+        }
 };
 
 /**
@@ -168,10 +168,10 @@ class Station {
         }
 
         // find the correct charger then add time to it
-        void addTime(long start, long end, bool up) {
+        void resolveTimeSequence(long start, long end, bool up) {
             // cout << "size " << timeSequences.size() << "\n";
             if (end < start) {
-                return;
+                throw errorStation("invalid time sequence detected\n");
             }
             
             // cout << "adding time to station " << stationID << "\n";
@@ -197,15 +197,11 @@ class Station {
                     timeSequences.push_back(timeSeq);
                     return;
                 }
-                
-                // cout << "vector [0] " << timeSequences[0] << "\n";
  
                 // compare the new time sequence against other sequences to check if they can be combined
                 // or insert the new sequence into the vector if it does not overlap
                 int j;
                 for(j = 0; j < timeSequences.size(); j++) {
-                    // cout << "size " << timeSequences.size() << "\n";
-                    // cout << "comparing " << timeSeq.first << "," << timeSeq.second << " to " << timeSequences[j].first << "," << timeSequences[j].second << "\n";
 
                     // check if the new sequence underlaps the current one
                     if (underlapCheck(j, timeSeq)) return;
@@ -304,10 +300,13 @@ class LogFileProcesser {
                             stationID = id; 
                             // cout << "making new station with id " << id << "\n";
                             newStation->setStationID(stationID);
-                        } else {
+                        } else if (stations.find(id) == stations.end()) {
                             // otherwise it is a charger within that station
+                            
                             stations[id] = newStation;
                             // cout << "charger " << id << " assigned to station " << newStation << "\n";
+                        } else {
+                            throw errorStation("duplicate or invalid station or charger id\n");
                         }
                     }
                 }
@@ -347,7 +346,7 @@ class LogFileProcesser {
                         bool up = tokens[3].compare("true") == 0 ? true : false;
 
                         // cout << "adding time to station " << stations[id] << "\n";
-                        stations[id]->addTime(start,end,up);
+                        stations[id]->resolveTimeSequence(start,end,up);
                         // cout << "added time\n";
                     } catch (exception e) {
                         // one or more of the values was not in the expected format
@@ -401,16 +400,8 @@ class LogFileProcesser {
                     int uptime = pair.second->getPercentUptime();
                     // cout << "uptime of station " << uptime << "\n";
                     uptimeReport += to_string(id) + " " + to_string(uptime) + "\n";
-                }
-                
-                uniqueStations.insert(pair.second->getStationID());
-
-                // cout << "unique Stations ";
-                // for (const auto& elem : uniqueStations) {
-                //     cout << elem << " ";
-                // }
-                // cout << "\n";
-                
+                }         
+                uniqueStations.insert(pair.second->getStationID());       
             }
 
             return uptimeReport;
@@ -425,7 +416,6 @@ class LogFileProcesser {
  * UnitTest
  * =============
  * Runs unit tests on:
- * - chargers
  * - stations
 */
 class UnitTest {
@@ -438,11 +428,11 @@ class UnitTest {
             Station station2 = Station(2);
 
             // add time to the chargers
-            station1.addTime(25000,50000,true);
-            station1.addTime(27000,90900,true);
+            station1.resolveTimeSequence(25000,50000,true);
+            station1.resolveTimeSequence(27000,90900,true);
 
-            station2.addTime(25000,50000,false);
-            station2.addTime(27000,90900,false);
+            station2.resolveTimeSequence(25000,50000,false);
+            station2.resolveTimeSequence(27000,90900,false);
 
             // check if the calculated time is correct
             return station1.getPercentUptime() == 100 && station2.getPercentUptime() == 0;
@@ -451,22 +441,28 @@ class UnitTest {
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        cout << "ERROR";
+        cout << "ERROR\n";
         return 1;
     }
     
     LogFileProcesser processor;
 
-    string uptimeReport = processor.processFile(argv[1]); 
-    cout << uptimeReport;
+    try {
+        string uptimeReport = processor.processFile(argv[1]); 
+        cout << uptimeReport;
+    } catch (errorStation e) {
+        cout << "ERROR\n";
+        cerr << e.what();
+    }
+    
     
 
-    /* unit tests for charger and station classes
+    // unit tests for charger and station classes
 
-    bool test1 = UnitTest::test1();
+    // bool test1 = UnitTest::test1();
 
-    cout << "test1 results: " << test1 << "\n";
-    */
+    // cout << "test1 results: " << test1 << "\n";
+    
 
     return 0;
 
